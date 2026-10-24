@@ -1,0 +1,8 @@
+flask
+gunicorn
+matplotlib
+seaborn
+pandas
+numpy
+jinja2
+weasyprint

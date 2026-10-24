@@ -1,0 +1,10 @@
+services:
+  report-engine:
+    build: .
+    container_name: report-engine
+    restart: unless-stopped
+    ports: ["5055:5055"]
+    environment:
+      - PUBLIC_BASE_URL=http://base_machine_ip:5055
+    volumes:
+      - ./data:/data

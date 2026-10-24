@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 10mm; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background:#EEF2F7; }
+  body { font-family: Arial, Helvetica, sans-serif; color:#1B2A3A; }
+  h2 { font-size:16px; color:#1F3A5F; margin:0 0 6px; }
+  .card { background:#fff; border-radius:10px; padding:18px; margin:0 0 14px; page-break-inside:avoid;
+          word-wrap:break-word; overflow-wrap:break-word; }
+  .how  { font-size:12px; color:#6B7B8C; font-style:italic; margin:0 0 10px; line-height:1.45; }
+  .find { font-size:13px; line-height:1.5; background:#F3F7FB; border-left:4px solid #2E86DE; padding:10px 12px; margin-top:10px; }
+  .chip { display:inline-block; padding:2px 8px; border-radius:10px; color:#fff; font-size:11px; font-weight:bold; }
+  li { margin-bottom:7px; font-size:14px; line-height:1.45; }
+  img { display:block; width:100%; max-width:100%; height:auto; }
+  table.t { width:100%; table-layout:fixed; border-collapse:collapse; font-size:12px; }
+  table.t th { text-align:left; background:#F3F7FB; color:#1F3A5F; padding:6px; }
+  table.t td { padding:6px; border-bottom:1px solid #E6EBF1; vertical-align:top;
+               word-wrap:break-word; overflow-wrap:break-word; word-break:break-word; }
+  table.kpi { width:100%; table-layout:fixed; border-collapse:separate; border-spacing:8px; }
+  table.kpi td { background:#fff; text-align:center; padding:14px 4px; border-radius:8px; }
+</style></head>
+<body>
+{% set sections = [
+  ("timeline", "1. When did it happen?"),
+  ("severity", "2. How serious was it?"),
+  ("heatmap", "3. Which machines, and at what time?"),
+  ("agents", "4. Which endpoints need attention first?"),
+  ("pareto", "5. What creates the most noise?"),
+  ("auth", "6. Login attacks"),
+  ("mitre", "7. How far did attackers get?"),
+  ("fim", "8. File changes"),
+  ("network", "9. Where is the activity coming from?")] %}
+{% set pcol = {"High": "#C0392B", "Medium": "#E67E22", "Low": "#27AE60"} %}
+
+{# ---- outer wrapper: PDF = plain block layout, EMAIL = 680px table for Outlook ---- #}
+{% if mode == "email" %}
+<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#EEF2F7"><tr><td align="center" style="padding:14px;">
+<table width="680" cellpadding="0" cellspacing="0" style="width:680px;max-width:100%;"><tr><td>
+{% endif %}
+
+<div style="background:#1F3A5F;border-radius:10px 10px 0 0;padding:26px 24px;color:#fff;">
+  <div style="font-size:12px;letter-spacing:3px;opacity:.8;">{{ m.org|upper }}</div>
+  <div style="font-size:26px;font-weight:bold;margin-top:6px;">Daily Security Report</div>
+  <div style="font-size:13px;opacity:.85;margin-top:6px;">{{ m.report_date }} &nbsp;|&nbsp; {{ m.period }}</div>
+</div>
+<div style="background:{{ m.risk_color }};padding:14px 24px;color:#fff;font-size:16px;font-weight:bold;margin-bottom:14px;">
+  Overall status: {{ m.risk_label }} &nbsp;&middot;&nbsp; Risk score {{ m.risk_score }}/100
+</div>
+
+<div class="card">
+  <h2>Summary in plain English</h2>
+  <div style="font-size:14px;line-height:1.55;">{{ m.exec_summary }}</div>
+</div>
+
+<div style="margin:0 -8px 6px -8px;">
+ <table class="kpi">
+  {% for row in m.kpis|batch(3) %}<tr>
+   {% for k in row %}
+   <td style="border-top:4px solid {{ k.color }};">
+     <div style="font-size:24px;font-weight:bold;color:{{ k.color }};">{{ k.value }}</div>
+     <div style="font-size:11px;color:#6B7B8C;margin-top:3px;">{{ k.label }}</div>
+     <div style="font-size:11px;color:{{ k.sub_color }};margin-top:3px;font-weight:bold;">{{ k.sub }}</div>
+   </td>
+   {% endfor %}
+  </tr>{% endfor %}
+ </table>
+</div>
+
+{% if m.notable %}
+<div class="card">
+  <h2>Most serious events</h2>
+  <p class="how">High and critical alerts, grouped by event and endpoint. "Level" is the Wazuh severity (12-14 = high, 15 = critical).</p>
+  <table class="t">
+   <colgroup><col style="width:60px"><col style="width:100px"><col style="width:50px"><col><col style="width:50px"></colgroup>
+   <tr><th>Last seen</th><th>Endpoint</th><th>Level</th><th>Event</th><th>Times</th></tr>
+   {% for n in m.notable %}
+   <tr><td>{{ n.time }}</td><td>{{ n.agent }}</td>
+    <td><span class="chip" style="background:{{ '#C0392B' if n.level >= 15 else '#E67E22' }};">{{ n.level }}</span></td>
+    <td>{{ n.rule }}</td><td>{{ n.count }}</td></tr>
+   {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% for key, title in sections %}{% if charts[key] %}
+{% set cp = m.captions.get(key, {}) %}
+<div class="card">
+  <h2>{{ title }}</h2>
+  {% if cp.how %}<p class="how"><b>How to read this:</b> {{ cp.how }}</p>{% endif %}
+  <img src="{{ charts[key] }}">
+  {% if key == "pareto" %}
+  <table class="t" style="margin-top:8px;">
+    <colgroup><col style="width:34px"><col><col style="width:60px"></colgroup>
+    {% for r in m.top_rules[:10] %}<tr><td><b>#{{ loop.index }}</b></td><td>{{ r.name }}</td><td>{{ "{:,}".format(r.count) }}</td></tr>{% endfor %}
+  </table>
+  {% endif %}
+  {% if cp.finding %}<div class="find"><b>What happened:</b> {{ cp.finding }}</div>{% endif %}
+</div>
+{% endif %}{% endfor %}
+
+<div class="card" style="border-left:5px solid #27AE60;">
+  <h2>Recommended actions</h2>
+  <ul style="padding-left:0;margin:0;list-style:none;">
+   {% for r in m.recommendations %}
+   <li><span class="chip" style="background:{{ pcol[r.priority] }};">{{ r.priority }}</span>&nbsp; {{ r.text }}</li>
+   {% endfor %}
+  </ul>
+</div>
+
+<div style="text-align:center;padding:10px;font-size:11px;color:#8A97A5;line-height:1.5;">
+  {% for n in m.data_notes %}{{ n }}<br>{% endfor %}
+  Generated {{ m.generated_at }} by Wazuh + n8n automation
+  {% if mode == "email" %}<br>The full report is attached as PDF.{% endif %}
+</div>
+
+{% if mode == "email" %}
+</td></tr></table></td></tr></table>
+{% endif %}
+</body></html>
